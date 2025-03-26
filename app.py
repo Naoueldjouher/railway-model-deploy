@@ -4,18 +4,22 @@ import pickle
 import joblib
 import pandas as pd
 from flask import Flask, jsonify, request
-from peewee import (
-    Model, IntegerField, FloatField,
-    TextField, IntegrityError
-)
+from peewee import Model, IntegerField, FloatField, TextField, IntegrityError, PostgresqlDatabase
 from playhouse.shortcuts import model_to_dict
 from playhouse.db_url import connect
+from flask_migrate import Migrate
+import logging
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+app = Flask(__name__)
 
 ########################################
 # Database Setup
 
-DB = connect(os.environ.get('DATABASE_URL'))
+# Connect to PostgreSQL on Railway
+DATABASE_URL = os.getenv('DATABASE_URL')
+DB = PostgresqlDatabase(DATABASE_URL, sslmode='require')
 
 class Prediction(Model):
     observation_id = IntegerField(unique=True)
@@ -26,7 +30,23 @@ class Prediction(Model):
     class Meta:
         database = DB
 
-DB.create_tables([Prediction], safe=True)
+# Set up Flask-Migrate for DB migrations (optional)
+migrate = Migrate(app, DB)
+
+# Initialize database and create tables
+def initialize_db():
+    try:
+        DB.connect()
+        DB.create_tables([Prediction], safe=True)
+    except Exception as e:
+        app.logger.error(f"Error connecting to the database: {e}")
+        raise e
+
+# Close DB connection after request
+@app.teardown_appcontext
+def close_db(error):
+    if not DB.is_closed():
+        DB.close()
 
 ########################################
 # Load Model and Column Information
@@ -40,10 +60,6 @@ with open('dtypes.pickle', 'rb') as fh:
     dtypes = pickle.load(fh)
 
 ########################################
-# Web Server
-
-app = Flask(__name__)
-
 # Helper function for input validation
 def validate_observation(obs):
     """
@@ -71,6 +87,9 @@ def validate_observation(obs):
         return "Invalid data type for 'native-country'. Expected string."
 
     return None  # No errors
+
+########################################
+# Web Server Routes
 
 @app.route('/predict', methods=['POST'])
 def predict():
@@ -116,3 +135,26 @@ def predict():
 
     # Return only the 'proba' value in the response
     return jsonify({"proba": proba}), 200
+
+@app.route('/health', methods=['GET'])
+def health_check():
+    """Health check endpoint to ensure the app and database are working."""
+    try:
+        # Simple DB check
+        DB.get_tables()
+        return jsonify({"status": "ok"}), 200
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+########################################
+# Main entry point
+
+if __name__ == '__main__':
+    # Initialize DB and run the app
+    try:
+        initialize_db()
+    except Exception as e:
+        app.logger.error("Failed to initialize the database.")
+        exit(1)  # Exit the app if DB initialization fails
+
+    app.run(debug=True, host='0.0.0.0', port=5000)
