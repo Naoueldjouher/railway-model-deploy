@@ -135,6 +135,33 @@ def predict():
     return jsonify({"proba": proba}), 200
 
 @app.route('/health', methods=['GET'])
+
+@app.route('/update', methods=['POST'])
+def update():
+    obs_dict = request.get_json()
+
+    # Validate JSON structure
+    if "id" not in obs_dict or "true_class" not in obs_dict:
+        return jsonify({"error": "Missing 'id' or 'true_class' in request"}), 400
+
+    _id = obs_dict["id"]
+    true_class = obs_dict["true_class"]
+
+    # Check if observation ID exists
+    prediction = Prediction.select().where(Prediction.observation_id == _id).first()
+    if not prediction:
+        return jsonify({"error": f"Prediction with id {_id} not found"}), 404
+
+    # Update the true_class
+    prediction.true_class = true_class
+
+    try:
+        prediction.save()
+        return jsonify({"observation_id": _id, "true_class": true_class, "proba": prediction.proba}), 200
+    except Exception as e:
+        return jsonify({"error": f"Failed to update true_class: {str(e)}"}), 500
+
+@app.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint to ensure the app and database are working."""
     try:
