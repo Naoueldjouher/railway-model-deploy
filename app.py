@@ -15,7 +15,7 @@ from playhouse.db_url import connect
 ########################################
 # Database Setup
 
-DB = connect(os.environ.get('DATABASE_URL') or 'sqlite:///predictions.db')
+DB = connect(os.environ.get('DATABASE_URL'))
 
 class Prediction(Model):
     observation_id = IntegerField(unique=True)
@@ -94,14 +94,10 @@ def predict():
     # Make prediction
     proba = pipeline.predict_proba(obs_df)[0, 1]
 
-    response = {"proba": proba}
-
     # Check if observation ID already exists
     if Prediction.select().where(Prediction.observation_id == _id).exists():
-        return jsonify({
-            "error": f"Observation ID {_id} already exists",
-            "proba": proba
-        }), 409
+        # If observation ID already exists, just return the 'proba' value without any error
+        return jsonify({"proba": proba}), 200
 
     # Save to database
     p = Prediction(
@@ -113,18 +109,10 @@ def predict():
     try:
         p.save()
     except IntegrityError:
-        error_msg = f"Observation ID {_id} already exists in the database."
-        response["error"] = error_msg
+        # This is a safeguard; ideally won't hit due to the previous check.
+        response = {"proba": proba}
         DB.rollback()
         return jsonify(response), 409
 
-    return jsonify(response), 200
-
-@app.route('/list-db-contents')
-def list_db_contents():
-    return jsonify([
-        model_to_dict(obs) for obs in Prediction.select()
-    ])
-
-if __name__ == "__main__":
-    app.run(host='0.0.0.0', debug=True, port=5000)
+    # Return only the 'proba' value in the response
+    return jsonify({"proba": proba}), 200
