@@ -7,7 +7,7 @@ from flask import Flask, jsonify, request
 from peewee import Model, IntegerField, FloatField, TextField, IntegrityError, PostgresqlDatabase
 from playhouse.shortcuts import model_to_dict
 from playhouse.db_url import connect
-from flask_migrate import Migrate
+
 import logging
 
 # Configure logging
@@ -30,8 +30,6 @@ class Prediction(Model):
     class Meta:
         database = DB
 
-# Set up Flask-Migrate for DB migrations (optional)
-migrate = Migrate(app, DB)
 
 # Initialize database and create tables
 def initialize_db():
