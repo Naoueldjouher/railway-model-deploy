@@ -157,7 +157,12 @@ def update():
 
     try:
         prediction.save()
-        return jsonify({"observation_id": _id, "true_class": true_class, "proba": prediction.proba}), 200
+        return jsonify({
+            "observation_id": _id,
+            "observation": prediction.observation,  # Ensure this exists in the DB
+            "true_class": true_class,
+            "proba": prediction.proba
+        }), 200
     except Exception as e:
         return jsonify({"error": f"Failed to update true_class: {str(e)}"}), 500
 
